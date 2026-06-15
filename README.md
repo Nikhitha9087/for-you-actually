@@ -159,6 +159,22 @@ curl -X POST "http://localhost:8080/api/admin/embed?max=150"
 
 ---
 
+## Deploy live (Hugging Face Spaces, free)
+
+The app is packaged as a single Docker image (Angular served by Spring Boot, catalogue baked in), so it can run as a free **Docker Space** , no card, no sleep.
+
+1. Create a free account at https://huggingface.co, then **New Space** → SDK **Docker** → blank template → name `for-you-actually` (public).
+2. In the Space, add a file named `Dockerfile` and paste the contents of [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile). (It clones this GitHub repo at build time, so the 59 MB catalogue never needs Git LFS on HF.)
+3. Ensure the Space `README.md` front-matter has `sdk: docker` and `app_port: 8080`.
+4. **Settings → Variables and secrets** → add secrets (all optional , the app runs without them):
+   - `GROQ_API_KEY` , real "why you'll like this" + taste mirror (free, no card: https://console.groq.com/keys)
+   - `GEMINI_API_KEY` , generation fallback + embeddings for novel onboarding picks
+5. The Space builds (~5–10 min) and goes live at `https://<username>-for-you-actually.hf.space`. After pushing changes to GitHub `main`, hit **factory rebuild** to redeploy.
+
+> For local Docker or other hosts (e.g. Render), the root [`Dockerfile`](Dockerfile) builds straight from the repo context instead.
+
+---
+
 ## API reference
 
 | Method | Endpoint | Purpose |
