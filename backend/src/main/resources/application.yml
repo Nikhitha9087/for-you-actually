@@ -40,7 +40,9 @@ fya:
   # Primary text-generation provider (blurbs + taste mirror). Generous free tier.
   # Gemini above stays as the automatic fallback; embeddings always use Gemini.
   groq:
-    api-key: ${GROQ_API_KEY:}
+    # Prefer FYA_GROQ_KEY (fresh secret name on the host), fall back to GROQ_API_KEY
+    # so existing local .env files keep working.
+    api-key: ${FYA_GROQ_KEY:${GROQ_API_KEY:}}
     base-url: https://api.groq.com/openai/v1
     chat-model: llama-3.3-70b-versatile
 
