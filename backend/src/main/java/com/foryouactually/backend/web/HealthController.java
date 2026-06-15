@@ -22,12 +22,19 @@ public class HealthController {
 
     @GetMapping("/health")
     public Map<String, Object> health() {
+        String raw = groqKey == null ? "" : groqKey;
+        String trimmed = raw.trim();
         return Map.of(
                 "status", "up",
                 "service", "for-you-actually",
                 "tmdbKeyConfigured", !tmdbKey.isBlank(),
                 "geminiKeyConfigured", !geminiKey.isBlank(),
-                "groqKeyConfigured", !groqKey.isBlank()
+                "groqKeyConfigured", !groqKey.isBlank(),
+                // Non-secret diagnostics: compare against your known-good key without leaking it.
+                "groqKeyRawLen", raw.length(),
+                "groqKeyTrimmedLen", trimmed.length(),
+                "groqKeyHasWhitespace", raw.length() != trimmed.length(),
+                "groqKeyStartsWithGsk", trimmed.startsWith("gsk_")
         );
     }
 }
