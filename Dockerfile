@@ -21,14 +21,15 @@ RUN mvn -q -DskipTests clean package
 
 # 3) Minimal runtime
 FROM eclipse-temurin:17-jre
-# Hugging Face Spaces run the container as uid 1000; create a matching user so the
-# baked H2 file and its lock/trace files are writable at runtime.
-RUN useradd -m -u 1000 appuser
+# The base image already ships a user with UID 1000 (the uid HF runs as), so we reuse
+# it instead of creating one. /app is chowned to that UID so the baked H2 file and its
+# lock/trace files are writable at runtime.
 WORKDIR /app
 COPY --from=backend /be/target/*.jar app.jar
 COPY backend/data/fya.mv.db ./data/fya.mv.db
-RUN chown -R appuser:appuser /app
-USER appuser
+RUN chown -R 1000:1000 /app
+USER 1000
+ENV HOME=/app
 # Cap the heap so it fits comfortably on small free instances.
 ENV JAVA_OPTS="-Xmx512m"
 EXPOSE 8080
