@@ -1,0 +1,33 @@
+# Java / Maven
+backend/target/
+*.class
+
+# H2 database: ship the prebuilt catalogue (fya.mv.db) so the app runs on clone,
+# but never commit H2's transient lock/trace files.
+backend/data/*.lock.db
+backend/data/*.trace.db
+
+# Generated frontend bundle copied into the jar for single-artifact/Docker builds
+backend/src/main/resources/static/
+
+# Node / Angular
+frontend/node_modules/
+frontend/.angular/
+frontend/dist/
+
+# Logs
+*.log
+
+# Env & secrets
+.env
+*.env
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

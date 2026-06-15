@@ -1,0 +1,86 @@
+<section class="head">
+  <h1>For you, <span class="accent">actually</span></h1>
+  <p class="sub">Three picks matched to the feeling you described , reactions reshape what comes next.</p>
+</section>
+
+<div class="filters">
+  <button
+    class="chip"
+    [class.active]="selectedGenre === null"
+    (click)="selectGenre(null)"
+  >
+    Surprise me
+  </button>
+  <button
+    class="chip"
+    *ngFor="let g of genres"
+    [class.active]="selectedGenre === g.id"
+    (click)="selectGenre(g.id)"
+  >
+    {{ g.label }}
+  </button>
+</div>
+
+<p class="error" *ngIf="error">{{ error }}</p>
+
+<div class="loading" *ngIf="loading">Reading the map of feelings…</div>
+
+<div class="grid" *ngIf="!loading">
+  <div class="rec" *ngFor="let card of cards" [class.faded]="card.done">
+    <div class="poster" [class.no-art]="!posterFor(card.rec)">
+      <img *ngIf="posterFor(card.rec)" [src]="posterFor(card.rec)" [alt]="card.rec.title" />
+      <span *ngIf="!posterFor(card.rec)" class="poster-fallback">{{ card.rec.title }}</span>
+      <span class="match">{{ (card.rec.matchScore * 100) | number: '1.0-0' }}% match</span>
+    </div>
+
+    <div class="rec-body">
+      <h3>{{ card.rec.title }}</h3>
+      <p class="meta">
+        {{ langName(card.rec.originalLanguage) }}
+        <span *ngIf="card.rec.releaseYear"> · {{ card.rec.releaseYear }}</span>
+      </p>
+      <div class="tags">
+        <span class="tag" *ngFor="let gn of card.rec.genres">{{ labels[gn] }}</span>
+      </div>
+
+      <p class="why" *ngIf="card.rec.whyYoullLikeIt">
+        <span class="why-mark">“</span>{{ card.rec.whyYoullLikeIt }}
+      </p>
+
+      <ng-container *ngIf="!card.done; else reacted">
+        <input
+          class="words"
+          type="text"
+          placeholder="In your words… (optional)"
+          [(ngModel)]="card.words"
+        />
+        <div class="actions">
+          <button class="act more" [disabled]="card.reacting" (click)="react(card, 'MORE_LIKE_THIS')">
+            More like this
+          </button>
+          <button class="act no" [disabled]="card.reacting" (click)="react(card, 'NOT_FOR_ME')">
+            Not for me
+          </button>
+          <button class="act seen" [disabled]="card.reacting" (click)="react(card, 'SEEN_IT')">
+            Seen it
+          </button>
+        </div>
+      </ng-container>
+
+      <ng-template #reacted>
+        <p class="done-msg">
+          <span *ngIf="card.done === 'MORE_LIKE_THIS'">Noted , more of this feeling.</span>
+          <span *ngIf="card.done === 'NOT_FOR_ME'">Got it , steering away.</span>
+          <span *ngIf="card.done === 'SEEN_IT'">Marked as seen.</span>
+        </p>
+      </ng-template>
+    </div>
+  </div>
+</div>
+
+<div class="next" *ngIf="!loading && cards.length">
+  <button class="primary" (click)="load()">
+    {{ allReacted ? 'Show me the next three' : 'Refresh picks' }}
+  </button>
+  <button class="ghost" (click)="startOver()">Start over</button>
+</div>

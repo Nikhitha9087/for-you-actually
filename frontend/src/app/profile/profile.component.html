@@ -1,0 +1,53 @@
+<section class="head">
+  <h1>Your taste, <span class="accent">mirrored</span></h1>
+  <p class="sub">What we've learned about the feelings you chase , and the films that carry them, in any language.</p>
+</section>
+
+<p class="error" *ngIf="error">{{ error }}</p>
+<div class="loading" *ngIf="loading">Reading you back to yourself…</div>
+
+<ng-container *ngIf="!loading && profile">
+  <div class="mirror" *ngIf="hasMirror">
+    <div class="mirror-col drawn" *ngIf="profile.drawnTo.length">
+      <h2>You're drawn to</h2>
+      <div class="phrases">
+        <span class="phrase" *ngFor="let t of profile.drawnTo">{{ t }}</span>
+      </div>
+    </div>
+    <div class="mirror-col avoid" *ngIf="profile.avoid.length">
+      <h2>You tend to avoid</h2>
+      <div class="phrases">
+        <span class="phrase muted" *ngFor="let t of profile.avoid">{{ t }}</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="mirror-empty" *ngIf="!hasMirror">
+    React to a few more picks and your taste portrait will sharpen.
+  </p>
+
+  <section class="shelf" *ngFor="let shelf of profile.shelves">
+    <h3>{{ labels[shelf.genre] }}</h3>
+    <div class="rail">
+      <div class="mini" *ngFor="let m of shelf.items; trackBy: trackById">
+        <div class="mini-poster" [class.no-art]="!m.posterUrl">
+          <img *ngIf="m.posterUrl" [src]="m.posterUrl" [alt]="m.title" />
+          <span *ngIf="!m.posterUrl" class="mini-fallback">{{ m.title }}</span>
+          <span class="mini-match">{{ (m.matchScore * 100) | number: '1.0-0' }}%</span>
+        </div>
+        <div class="mini-title">{{ m.title }}</div>
+        <div class="mini-meta">
+          {{ langName(m.originalLanguage) }}<span *ngIf="m.releaseYear"> · {{ m.releaseYear }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="empty" *ngIf="!profile.shelves.length">
+    No shelves yet , <a routerLink="/">tell us what you love</a> to get started.
+  </p>
+
+  <div class="actions">
+    <a class="primary" routerLink="/discover">Back to discovering</a>
+  </div>
+</ng-container>

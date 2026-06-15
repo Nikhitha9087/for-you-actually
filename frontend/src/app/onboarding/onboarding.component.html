@@ -1,0 +1,67 @@
+<section class="intro">
+  <h1>What do you love, <span class="accent">actually?</span></h1>
+  <p class="lede">
+    Forget genres for a second. Name one film you adore in each mood below and,
+    in a line, what got under your skin. We'll learn the <em>feeling</em>, then
+    find it again , in any language.
+  </p>
+  <p class="hint">Start typing a film and pick it from the list. Fill as many or as few moods as you like , even one is enough.</p>
+</section>
+
+<div class="cards">
+  <div class="card" *ngFor="let g of genres">
+    <div class="card-head">
+      <h3>{{ g.label }}</h3>
+      <span class="blurb">{{ g.blurb }}</span>
+    </div>
+    <div class="search-wrap">
+      <input
+        class="title-input"
+        type="text"
+        autocomplete="off"
+        [placeholder]="g.placeholder"
+        [ngModel]="picks[g.id].title"
+        (ngModelChange)="onType(g.id, $event)"
+        (focus)="activeGenre = g.id"
+        (blur)="closeSoon()"
+      />
+      <span class="check" *ngIf="picks[g.id].confirmed" title="Matched on TMDB">✓</span>
+
+      <ul class="suggestions" *ngIf="activeGenre === g.id && suggestions.length">
+        <li *ngFor="let s of suggestions" (mousedown)="select(g.id, s)">
+          <div class="s-thumb" [class.no-art]="!s.posterUrl">
+            <img *ngIf="s.posterUrl" [src]="s.posterUrl" [alt]="s.title" />
+          </div>
+          <div class="s-info">
+            <span class="s-title">{{ s.title }}</span>
+            <span class="s-meta">
+              {{ langName(s.language) }}<span *ngIf="s.year"> · {{ s.year }}</span>
+            </span>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <p class="recognized" *ngIf="picks[g.id].confirmed">
+      Matched: {{ langName(picks[g.id].language) }}<span *ngIf="picks[g.id].year"> · {{ picks[g.id].year }}</span>
+      , we'll use its real synopsis to read your taste.
+    </p>
+
+    <textarea
+      class="why-input"
+      rows="2"
+      placeholder="Why this one? What did it make you feel?"
+      [(ngModel)]="picks[g.id].why"
+    ></textarea>
+  </div>
+</div>
+
+<div class="footer">
+  <p class="error" *ngIf="error">{{ error }}</p>
+  <div class="footer-row">
+    <span class="counter">{{ filledCount }} / {{ genres.length }} moods</span>
+    <button class="primary" [disabled]="!canSubmit" (click)="submit()">
+      {{ submitting ? 'Reading your taste…' : 'Build my taste profile' }}
+    </button>
+  </div>
+</div>
