@@ -1,0 +1,25 @@
+# Build outputs / deps (rebuilt inside the image)
+**/node_modules
+**/target
+**/dist
+**/.angular
+
+# VCS & local tooling
+.git
+.gitignore
+**/.idea
+**/.vscode
+
+# Secrets & logs (never bake into the image)
+**/.env
+*.env
+!**/.env.example
+*.log
+
+# H2 transient files (the catalogue fya.mv.db IS copied explicitly in the Dockerfile)
+backend/data/*.lock.db
+backend/data/*.trace.db
+
+# Docs not needed at build
+README.md
+run.ps1

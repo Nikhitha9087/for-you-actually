@@ -1,3 +1,14 @@
+<!-- The YAML block below configures the Hugging Face Space deploy; it is ignored by GitHub's renderer aside from a small header. -->
+---
+title: For You, Actually
+emoji: "\U0001F3AC"
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 8080
+pinned: false
+---
+
 # For You, Actually
 
 A movie recommender that learns the **feeling** you love and finds it for you **across languages** , so a Spanish thriller can lead you to the Korean one that hits the same nerve. It gets sharper every time you react to its picks.
