@@ -1,7 +1,9 @@
 package com.foryouactually.backend.client;
 
+import com.foryouactually.backend.client.dto.BatchEmbedResponse;
 import com.foryouactually.backend.client.dto.EmbedResponse;
 import com.foryouactually.backend.client.dto.GenerateResponse;
+import java.util.ArrayList;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -47,6 +49,62 @@ public class GeminiClient {
                 sleep(1000L * attempt);
             }
         }
+    }
+
+    /** Max texts Gemini accepts in a single batchEmbedContents call. */
+    public static final int MAX_BATCH = 100;
+
+    /**
+     * Embeds many texts in one HTTP call. The whole batch counts as a single request against
+     * the daily quota, so this is the quota-efficient way to fingerprint a large catalogue.
+     * Returns one vector per input, in order. Retries the batch on rate-limit (429).
+     */
+    public List<float[]> batchEmbed(List<String> texts) {
+        if (texts.size() > MAX_BATCH) {
+            throw new IllegalArgumentException("Batch too large: " + texts.size() + " > " + MAX_BATCH);
+        }
+        int attempt = 0;
+        while (true) {
+            try {
+                return doBatchEmbed(texts);
+            } catch (HttpClientErrorException.TooManyRequests e) {
+                attempt++;
+                if (attempt >= 5) {
+                    throw e;
+                }
+                sleep(1000L * attempt);
+            }
+        }
+    }
+
+    private List<float[]> doBatchEmbed(List<String> texts) {
+        List<Map<String, Object>> requests = new ArrayList<>(texts.size());
+        for (String text : texts) {
+            requests.add(Map.of(
+                    "model", "models/" + embeddingModel,
+                    "content", Map.of("parts", List.of(Map.of("text", text)))
+            ));
+        }
+        Map<String, Object> body = Map.of("requests", requests);
+
+        BatchEmbedResponse response = http.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/models/{model}:batchEmbedContents")
+                        .queryParam("key", apiKey)
+                        .build(embeddingModel))
+                .body(body)
+                .retrieve()
+                .body(BatchEmbedResponse.class);
+
+        if (response == null || response.embeddings() == null
+                || response.embeddings().size() != texts.size()) {
+            throw new IllegalStateException("Gemini batch embedding returned an unexpected result");
+        }
+        List<float[]> vectors = new ArrayList<>(texts.size());
+        for (EmbedResponse.Embedding embedding : response.embeddings()) {
+            vectors.add(embedding.values());
+        }
+        return vectors;
     }
 
     private float[] doEmbed(String text) {

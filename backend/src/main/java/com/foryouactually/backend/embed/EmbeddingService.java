@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -37,19 +38,37 @@ public class EmbeddingService {
 
         int done = 0;
         int failed = 0;
-        for (Movie movie : pending) {
+        for (int start = 0; start < pending.size(); start += GeminiClient.MAX_BATCH) {
+            List<Movie> chunk = pending.subList(start, Math.min(start + GeminiClient.MAX_BATCH, pending.size()));
             try {
-                float[] vector = gemini.embed(textFor(movie));
-                movie.setEmbeddingJson(VectorUtil.toJson(vector));
-                movies.save(movie);
-                done++;
-                if (done % 25 == 0) {
-                    log.info("Fingerprinted {}/{} in this batch", done, pending.size());
+                List<String> texts = new ArrayList<>(chunk.size());
+                for (Movie m : chunk) {
+                    texts.add(textFor(m));
                 }
-            } catch (Exception e) {
-                failed++;
-                log.warn("Fingerprint failed for movie {} ({}): {}",
-                        movie.getId(), movie.getTitle(), e.getMessage());
+                List<float[]> vectors = gemini.batchEmbed(texts);
+                for (int i = 0; i < chunk.size(); i++) {
+                    Movie m = chunk.get(i);
+                    m.setEmbeddingJson(VectorUtil.toJson(vectors.get(i)));
+                    movies.save(m);
+                    done++;
+                }
+                log.info("Fingerprinted batch of {} ({} done this run)", chunk.size(), done);
+            } catch (Exception batchError) {
+                // One bad text fails the whole batch; retry the chunk per-item so the rest survive.
+                log.warn("Batch embed failed ({}); retrying {} movies individually",
+                        batchError.getMessage(), chunk.size());
+                for (Movie m : chunk) {
+                    try {
+                        float[] vector = gemini.embed(textFor(m));
+                        m.setEmbeddingJson(VectorUtil.toJson(vector));
+                        movies.save(m);
+                        done++;
+                    } catch (Exception e) {
+                        failed++;
+                        log.warn("Fingerprint failed for movie {} ({}): {}",
+                                m.getId(), m.getTitle(), e.getMessage());
+                    }
+                }
             }
         }
 
