@@ -28,8 +28,11 @@ public class GroqTextGenerator implements TextGenerator {
             @Value("${fya.groq.api-key}") String apiKey,
             @Value("${fya.groq.chat-model}") String model) {
         this.http = RestClient.builder().baseUrl(baseUrl).build();
-        this.apiKey = apiKey;
-        this.model = model;
+        // Secrets pasted into hosting UIs (e.g. HF Spaces) frequently carry a trailing
+        // newline/space. That survives the isBlank() check but corrupts the Bearer header,
+        // yielding a misleading 401 invalid_api_key. Trim defensively.
+        this.apiKey = apiKey == null ? null : apiKey.trim();
+        this.model = model == null ? null : model.trim();
     }
 
     @Override
