@@ -17,13 +17,17 @@ public class HealthController {
     @Value("${fya.gemini.api-key:}")
     private String geminiKey;
 
+    @Value("${fya.groq.api-key:}")
+    private String groqKey;
+
     @GetMapping("/health")
     public Map<String, Object> health() {
         return Map.of(
                 "status", "up",
                 "service", "for-you-actually",
                 "tmdbKeyConfigured", !tmdbKey.isBlank(),
-                "geminiKeyConfigured", !geminiKey.isBlank()
+                "geminiKeyConfigured", !geminiKey.isBlank(),
+                "groqKeyConfigured", !groqKey.isBlank()
         );
     }
 }
