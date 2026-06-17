@@ -57,12 +57,22 @@ public class MovieVectorIndex {
      * Optionally restricted to one genre and excluding ids the user has already seen.
      */
     public List<ScoredMovie> nearest(float[] target, Genre genre, Set<Long> exclude, int limit) {
+        return nearest(target, genre, null, exclude, limit);
+    }
+
+    /**
+     * As {@link #nearest(float[], Genre, Set, int)} but also restrictable to one original
+     * language (e.g. "ko"). The language filter runs before the limit, so the result is the
+     * best matches <em>within</em> that language rather than the global best then filtered.
+     */
+    public List<ScoredMovie> nearest(float[] target, Genre genre, String language, Set<Long> exclude, int limit) {
         ensureLoaded();
         if (target == null) {
             return List.of();
         }
         return indexed.stream()
                 .filter(m -> genre == null || m.getGenres().contains(genre))
+                .filter(m -> language == null || language.equalsIgnoreCase(m.getOriginalLanguage()))
                 .filter(m -> exclude == null || !exclude.contains(m.getId()))
                 .map(m -> new ScoredMovie(m, VectorMath.cosine(target, vectors.get(m.getId()))))
                 .sorted(Comparator.comparingDouble(ScoredMovie::score).reversed())

@@ -37,12 +37,16 @@ export class ApiService {
   recommend(
     userId: string,
     genre: Genre | null,
+    language: string | null = null,
     count = 9,
     exclude: number[] = []
   ): Observable<Recommendation[]> {
     let params = new HttpParams().set('userId', userId).set('count', count);
     if (genre) {
       params = params.set('genre', genre);
+    }
+    if (language) {
+      params = params.set('language', language);
     }
     if (exclude.length) {
       params = params.set('exclude', exclude.join(','));

@@ -20,6 +20,14 @@ import java.util.Set;
 @Service
 public class RecommendationService {
 
+    /**
+     * Soft ceiling on how much of one page may share a single original language, as a fraction of
+     * the page size. Kept below 1.0 so the default "mix" always leaves room for cross-language
+     * discovery, but high enough that we don't force in weak foreign matches over strong native
+     * ones (users who want a single cinema can pick it explicitly via the language filter).
+     */
+    private static final double MAX_LANGUAGE_SHARE = 0.7;
+
     private final UserProfileRepository users;
     private final MovieVectorIndex vectorIndex;
 
@@ -39,10 +47,20 @@ public class RecommendationService {
      */
     /** Convenience overload with no session-exclusions (used by profile shelves). */
     public List<ScoredMovie> recommend(String userId, Genre genre, int count) {
-        return recommend(userId, genre, count, null);
+        return recommend(userId, genre, null, count, null);
     }
 
+    /** Backward-compatible overload: full cross-language mix (no language filter). */
     public List<ScoredMovie> recommend(String userId, Genre genre, int count, Set<Long> extraExclude) {
+        return recommend(userId, genre, null, count, extraExclude);
+    }
+
+    /**
+     * Main entry point. {@code language} is optional: when null the picks are the cross-language
+     * mix (soft 50% per-language cap); when set (e.g. "ko") we return the best matches in that one
+     * language and skip the cap, because the user explicitly asked for that cinema.
+     */
+    public List<ScoredMovie> recommend(String userId, Genre genre, String language, int count, Set<Long> extraExclude) {
         UserProfile user = users.findById(userId)
                 .orElseThrow(() -> new UnknownUserException(userId));
 
@@ -58,22 +76,22 @@ public class RecommendationService {
             }
             // Pull a generous candidate pool, then diversify down to `count`.
             List<ScoredMovie> pool =
-                    vectorIndex.nearest(VectorUtil.fromJson(dotJson), genre, exclude, poolSize(count));
-            return diversifyByLanguage(pool, count);
+                    vectorIndex.nearest(VectorUtil.fromJson(dotJson), genre, language, exclude, poolSize(count));
+            return language != null ? take(pool, count) : diversifyByLanguage(pool, count);
         }
 
-        return surpriseMe(user, exclude, count);
+        return surpriseMe(user, exclude, language, count);
     }
 
     /**
      * Round-robin across every seeded dot so each mood contributes (not just the loudest one),
      * then diversify by language. Within a dot we stay in its genre to keep the mood honest.
      */
-    private List<ScoredMovie> surpriseMe(UserProfile user, Set<Long> exclude, int count) {
+    private List<ScoredMovie> surpriseMe(UserProfile user, Set<Long> exclude, String language, int count) {
         List<List<ScoredMovie>> pools = new ArrayList<>();
         for (Map.Entry<Genre, String> dot : user.getTasteVectors().entrySet()) {
             float[] vector = VectorUtil.fromJson(dot.getValue());
-            List<ScoredMovie> pool = vectorIndex.nearest(vector, dot.getKey(), exclude, poolSize(count));
+            List<ScoredMovie> pool = vectorIndex.nearest(vector, dot.getKey(), language, exclude, poolSize(count));
             if (!pool.isEmpty()) {
                 pools.add(pool);
             }
@@ -94,20 +112,29 @@ public class RecommendationService {
                 }
             }
         }
-        return diversifyByLanguage(new ArrayList<>(merged.values()), count);
+        List<ScoredMovie> mergedList = new ArrayList<>(merged.values());
+        // A single language is already its own variety (round-robin keeps genres mixed), so the
+        // per-language cap would be self-defeating; only diversify for the cross-language mix.
+        return language != null ? take(mergedList, count) : diversifyByLanguage(mergedList, count);
+    }
+
+    /** First {@code count} of an already-ranked list. */
+    private List<ScoredMovie> take(List<ScoredMovie> ranked, int count) {
+        return ranked.size() > count ? new ArrayList<>(ranked.subList(0, count)) : new ArrayList<>(ranked);
     }
 
     /**
-     * Soft per-language cap: at most ~50% of the picks may share one original language. We walk
-     * the candidates in their existing (score/round-robin) order, taking each while its language
-     * is under cap and deferring the rest. If diversity leaves us short of {@code count}, we
-     * back-fill from the deferred ones (still best-scored first) so the user never gets fewer.
+     * Soft per-language cap: at most {@link #MAX_LANGUAGE_SHARE} of the picks may share one
+     * original language. We walk the candidates in their existing (score/round-robin) order,
+     * taking each while its language is under cap and deferring the rest. If diversity leaves us
+     * short of {@code count}, we back-fill from the deferred ones (still best-scored first) so the
+     * user never gets fewer.
      */
     private List<ScoredMovie> diversifyByLanguage(List<ScoredMovie> ranked, int count) {
         if (ranked.size() <= count) {
             return new ArrayList<>(ranked);
         }
-        int perLanguageCap = Math.max(1, (int) Math.ceil(count / 2.0));
+        int perLanguageCap = Math.max(1, (int) Math.ceil(count * MAX_LANGUAGE_SHARE));
         Map<String, Integer> langCount = new HashMap<>();
         List<ScoredMovie> chosen = new ArrayList<>(count);
         List<ScoredMovie> deferred = new ArrayList<>();

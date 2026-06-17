@@ -21,6 +21,18 @@
   </button>
 </div>
 
+<div class="lang-filter">
+  <label for="langSel">In the mood for a language?</label>
+  <select
+    id="langSel"
+    [ngModel]="selectedLanguage || ''"
+    (ngModelChange)="selectLanguage($event)"
+  >
+    <option value="">Any , surprise me with a mix</option>
+    <option *ngFor="let l of languages" [value]="l.code">{{ l.label }}</option>
+  </select>
+</div>
+
 <p class="error" *ngIf="error">{{ error }}</p>
 
 <div class="loading" *ngIf="loading">Reading the map of feelings…</div>

@@ -50,9 +50,11 @@ public class RecommendationController {
     @GetMapping("/recommend")
     public List<RecommendationDto> recommend(@RequestParam String userId,
                                              @RequestParam(required = false) Genre genre,
+                                             @RequestParam(required = false) String language,
                                              @RequestParam(defaultValue = "9") int count,
                                              @RequestParam(required = false) String exclude) {
-        List<ScoredMovie> picks = recommendations.recommend(userId, genre, count, parseIds(exclude));
+        String lang = (language == null || language.isBlank()) ? null : language.trim();
+        List<ScoredMovie> picks = recommendations.recommend(userId, genre, lang, count, parseIds(exclude));
         UserProfile user = users.findById(userId).orElse(null);
 
         return picks.stream()

@@ -24,6 +24,24 @@ export class DiscoverComponent implements OnInit {
   genres = GENRES;
   labels = GENRE_LABELS;
   selectedGenre: Genre | null = null;
+
+  /** Optional "I'm in the mood for this cinema" filter. null = the cross-language mix (default). */
+  selectedLanguage: string | null = null;
+  /** Languages with enough catalogue depth to recommend from, richest first. */
+  readonly languages: { code: string; label: string }[] = [
+    { code: 'en', label: 'English' },
+    { code: 'ko', label: 'Korean' },
+    { code: 'ja', label: 'Japanese' },
+    { code: 'hi', label: 'Hindi' },
+    { code: 'ta', label: 'Tamil' },
+    { code: 'es', label: 'Spanish' },
+    { code: 'fr', label: 'French' },
+    { code: 'it', label: 'Italian' },
+    { code: 'de', label: 'German' },
+    { code: 'zh', label: 'Chinese' },
+    { code: 'ru', label: 'Russian' },
+    { code: 'pt', label: 'Portuguese' },
+  ];
   cards: CardState[] = [];
   loading = false;
   loadingMore = false;
@@ -53,6 +71,16 @@ export class DiscoverComponent implements OnInit {
     this.load();
   }
 
+  /** Called from the language dropdown; "" maps to the cross-language mix. */
+  selectLanguage(code: string): void {
+    const next = code ? code : null;
+    if (this.selectedLanguage === next) {
+      return;
+    }
+    this.selectedLanguage = next;
+    this.load();
+  }
+
   /** Fresh start for a mood: reset the seen-this-session set and load the first batch. */
   load(): void {
     const userId = this.api.userId;
@@ -63,7 +91,7 @@ export class DiscoverComponent implements OnInit {
     this.error = null;
     this.exhausted = false;
     this.shownIds = new Set<number>();
-    this.api.recommend(userId, this.selectedGenre, this.batchSize, []).subscribe({
+    this.api.recommend(userId, this.selectedGenre, this.selectedLanguage, this.batchSize, []).subscribe({
       next: (recs) => {
         this.cards = recs.map((rec) => this.toCard(rec));
         recs.forEach((rec) => this.shownIds.add(rec.id));
@@ -88,7 +116,7 @@ export class DiscoverComponent implements OnInit {
     }
     this.loadingMore = true;
     this.api
-      .recommend(userId, this.selectedGenre, this.batchSize, Array.from(this.shownIds))
+      .recommend(userId, this.selectedGenre, this.selectedLanguage, this.batchSize, Array.from(this.shownIds))
       .subscribe({
         next: (recs) => {
           const fresh = recs.filter((rec) => !this.shownIds.has(rec.id));
