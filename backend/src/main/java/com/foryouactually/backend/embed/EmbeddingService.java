@@ -1,6 +1,5 @@
 package com.foryouactually.backend.embed;
 
-import com.foryouactually.backend.client.GeminiClient;
 import com.foryouactually.backend.model.Movie;
 import com.foryouactually.backend.repository.MovieRepository;
 import com.foryouactually.backend.util.VectorUtil;
@@ -16,12 +15,29 @@ public class EmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
 
-    private final GeminiClient gemini;
+    private final EmbeddingModel embedder;
     private final MovieRepository movies;
 
-    public EmbeddingService(GeminiClient gemini, MovieRepository movies) {
-        this.gemini = gemini;
+    public EmbeddingService(EmbeddingModel embedder, MovieRepository movies) {
+        this.embedder = embedder;
         this.movies = movies;
+    }
+
+    /**
+     * Wipes every stored fingerprint. Needed when switching embedding models, since vectors
+     * from different models live in incompatible spaces and must all be regenerated.
+     * Returns how many were cleared.
+     */
+    public long clearAll() {
+        List<Movie> embedded = movies.findAll().stream()
+                .filter(m -> m.getEmbeddingJson() != null)
+                .toList();
+        for (Movie m : embedded) {
+            m.setEmbeddingJson(null);
+            movies.save(m);
+        }
+        log.info("Cleared {} embeddings (model switch)", embedded.size());
+        return embedded.size();
     }
 
     /**
@@ -38,14 +54,15 @@ public class EmbeddingService {
 
         int done = 0;
         int failed = 0;
-        for (int start = 0; start < pending.size(); start += GeminiClient.MAX_BATCH) {
-            List<Movie> chunk = pending.subList(start, Math.min(start + GeminiClient.MAX_BATCH, pending.size()));
+        int batchSize = embedder.maxBatch();
+        for (int start = 0; start < pending.size(); start += batchSize) {
+            List<Movie> chunk = pending.subList(start, Math.min(start + batchSize, pending.size()));
             try {
                 List<String> texts = new ArrayList<>(chunk.size());
                 for (Movie m : chunk) {
                     texts.add(textFor(m));
                 }
-                List<float[]> vectors = gemini.batchEmbed(texts);
+                List<float[]> vectors = embedder.batchEmbed(texts);
                 for (int i = 0; i < chunk.size(); i++) {
                     Movie m = chunk.get(i);
                     m.setEmbeddingJson(VectorUtil.toJson(vectors.get(i)));
@@ -59,7 +76,7 @@ public class EmbeddingService {
                         batchError.getMessage(), chunk.size());
                 for (Movie m : chunk) {
                     try {
-                        float[] vector = gemini.embed(textFor(m));
+                        float[] vector = embedder.embed(textFor(m));
                         m.setEmbeddingJson(VectorUtil.toJson(vector));
                         movies.save(m);
                         done++;

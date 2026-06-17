@@ -28,6 +28,14 @@ server:
 # Set them in your shell before running:
 #   $env:TMDB_API_KEY="..."   ;  $env:GEMINI_API_KEY="..."
 fya:
+  embedding:
+    # Which fingerprint generator to use: "local" (DJL + all-MiniLM-L6-v2, quota-free, default)
+    # or "gemini" (hosted API, 1,000/day free-tier cap). All stored vectors must come from one
+    # model — switching providers requires re-fingerprinting (POST /api/admin/embed/clear then /embed).
+    provider: ${FYA_EMBEDDING_PROVIDER:local}
+    local:
+      model-url: djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2
+      max-batch: 64
   tmdb:
     # Prefer FYA_TMDB_KEY (reliable fresh secret name on hosts), fall back to TMDB_API_KEY.
     api-key: ${FYA_TMDB_KEY:${TMDB_API_KEY:}}

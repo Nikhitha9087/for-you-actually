@@ -1,6 +1,6 @@
 package com.foryouactually.backend.taste;
 
-import com.foryouactually.backend.client.GeminiClient;
+import com.foryouactually.backend.embed.EmbeddingModel;
 import com.foryouactually.backend.match.MovieVectorIndex;
 import com.foryouactually.backend.model.Genre;
 import com.foryouactually.backend.model.Movie;
@@ -28,16 +28,16 @@ public class TasteProfileService {
     private static final double POSITIVE_PULL = 0.30;
     private static final double NEGATIVE_PUSH = -0.30;
 
-    private final GeminiClient gemini;
+    private final EmbeddingModel embedder;
     private final MovieVectorIndex vectorIndex;
     private final MovieRepository movies;
     private final UserProfileRepository users;
 
-    public TasteProfileService(GeminiClient gemini,
+    public TasteProfileService(EmbeddingModel embedder,
                                MovieVectorIndex vectorIndex,
                                MovieRepository movies,
                                UserProfileRepository users) {
-        this.gemini = gemini;
+        this.embedder = embedder;
         this.vectorIndex = vectorIndex;
         this.movies = movies;
         this.users = users;
@@ -102,7 +102,7 @@ public class TasteProfileService {
                 ? userWords
                 : pick.title() + ". " + pick.overview() + ". "
                         + (pick.why() == null ? "" : pick.why());
-        return gemini.embed(seedText);
+        return embedder.embed(seedText);
     }
 
     /** Applies a reaction: moves the relevant taste dot(s) and remembers the movie as seen. */

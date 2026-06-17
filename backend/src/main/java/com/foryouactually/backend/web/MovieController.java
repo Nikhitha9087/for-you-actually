@@ -77,6 +77,17 @@ public class MovieController {
     }
 
     /**
+     * Wipes all stored fingerprints — used when switching embedding models (vectors from
+     * different models are not comparable, so the whole catalogue must be re-fingerprinted).
+     */
+    @PostMapping("/admin/embed/clear")
+    public Map<String, Object> clearEmbeddings() {
+        long cleared = embeddingService.clearAll();
+        vectorIndex.refresh();
+        return Map.of("cleared", cleared, "totalInCatalog", movies.count());
+    }
+
+    /**
      * Demo of the feel-matching: the movies whose fingerprints are closest to a given movie's.
      * Optional genre filter. This is "what feels like The Godfather?" — the heart of the app.
      */

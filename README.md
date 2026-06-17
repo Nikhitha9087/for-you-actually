@@ -33,13 +33,13 @@ Most recommenders match on genre tags or "people who watched X also watched Y." 
 
 ## How it works (the AI, in plain words)
 
-- **Feeling fingerprint (embedding).** Each film's synopsis is turned into a list of numbers , coordinates on a shared "map of feelings." Films that *feel* alike land near each other, regardless of language.
+- **Feeling fingerprint (embedding).** Each film's synopsis is turned into a list of numbers , coordinates on a shared "map of feelings." Films that *feel* alike land near each other, regardless of language. Fingerprints are generated **fully on-box** by a local sentence-transformer (`all-MiniLM-L6-v2`, 384-dim) , no API, no daily cap.
 - **You are five dots, not one.** Loving slow-burn thrillers *and* rom-coms shouldn't average into mush, so taste is modelled as one point per genre. Each is seeded from your favourite + your "why" + that film's real synopsis.
 - **Recommend = nearest neighbours.** Within a genre, the picks are the films whose fingerprints sit closest to your taste dot (cosine similarity). "Surprise me" pools the best across all your dots.
 - **Adaptive learning.** A reaction nudges the relevant dot toward (or away from) that film's fingerprint, so the next round leans into what you actually responded to.
 - **RAG-grounded explanations.** The "why you'll like this" note is written by an LLM that is handed *only* the film's real facts (title, year, language, mood, synopsis) plus your own stated taste , so it explains honestly and never hallucinates a plot or spoils a twist.
 - **The mirror.** One LLM call summarises the themes recurring across the films you gravitate toward (and push away) into short, human phrases.
-- **Provider-agnostic generation.** Text generation sits behind a `TextGenerator` seam with an ordered fallback chain: **Groq (Llama-3.3-70b) → Gemini → a deterministic, no-LLM template**. No single provider's quota or outage can blank out a feature , if generation is unavailable, the blurb/mirror degrade to an honest sentence built from the film's own metadata rather than disappearing. Embeddings always use Gemini (Groq has no embeddings API).
+- **Provider-agnostic embeddings & generation.** Embeddings sit behind an `EmbeddingModel` seam (default **local DJL `all-MiniLM-L6-v2`**, swappable to hosted Gemini via one property). Text generation sits behind a `TextGenerator` seam with an ordered fallback chain: **Groq (Llama-3.3-70b) → Gemini → a deterministic, no-LLM template**. No single provider's quota or outage can blank out a feature , if generation is unavailable, the blurb/mirror degrade to an honest sentence built from the film's own metadata rather than disappearing.
 
 ---
 
@@ -52,7 +52,7 @@ Most recommenders match on genre tags or "people who watched X also watched Y." 
   │  (TMDB type-  │             │ RecommendationController  │ ─────▶  TMDB  /discover
   │   ahead)      │             │ ProfileController         │
   │ Discover loop │ ◀─────────  │   ├─ RecommendationService│
-  │ Taste profile │             │   ├─ TasteProfileService  │ ─────▶  Gemini embeddings
+  │ Taste profile │             │   ├─ TasteProfileService  │ ──▶ local embeddings (DJL)
   └───────────────┘             │   ├─ ExplanationService   │      generation chain:
                                 │   ├─ ProfileService       │ ─────▶  Groq Llama-3.3-70b
                                 │   ├─ TextGenerationService │ ──▶ Gemini (fallback)
@@ -62,15 +62,15 @@ Most recommenders match on genre tags or "people who watched X also watched Y." 
                                 └──────────────────────────┘
 ```
 
-**Data flow:** TMDB → catalogue (H2) → Gemini embeddings (feeling fingerprints) → in-memory vector index. A user onboards → per-genre taste dots → nearest-neighbour search → generation chain writes the explanation → reactions nudge the dots.
+**Data flow:** TMDB → catalogue (H2) → local embeddings (feeling fingerprints) → in-memory vector index. A user onboards → per-genre taste dots → nearest-neighbour search → generation chain writes the explanation → reactions nudge the dots.
 
 ### How it scales
 
-The current catalogue is a **curated ~960-film slice** of TMDB's ~1.2M movies , we only recommend films we've fingerprinted, so the catalogue *is* the candidate pool (not a sample we extrapolate from). What scales is the **method**, not today's data:
+The current catalogue is a **curated ~4,300-film slice** of TMDB's ~1.2M movies , we only recommend films we've fingerprinted, so the catalogue *is* the candidate pool (not a sample we extrapolate from). What scales is the **method**, not today's data:
 
-- **Matching is a vector nearest-neighbour search**, the same family of technique used at hundreds-of-millions scale. Today `MovieVectorIndex` is a brute-force in-memory scan (O(N) per query) , instant at ~1k films. Growing to millions changes exactly **one component**: swap the in-memory map for an **ANN index** (FAISS / HNSW / `pgvector` / Qdrant) for sub-linear search. The user model, 5-dot taste logic, and recommendation flow are untouched.
-- **The real bottleneck to a bigger catalogue is embedding cost**, not the algorithm: fingerprinting N films = N embedding calls (~1k/day on the free tier). That's why we curate rather than ingest everything.
-- **Curation is a feature, not just a limit.** TMDB's long tail has thin/missing synopses that yield noisy embeddings; a well-described, multi-language set of ~1k films gives *cleaner* feel-matches than millions of sparse rows.
+- **Matching is a vector nearest-neighbour search**, the same family of technique used at hundreds-of-millions scale. Today `MovieVectorIndex` is a brute-force in-memory scan (O(N) per query) , instant at a few thousand films. Growing to millions changes exactly **one component**: swap the in-memory map for an **ANN index** (FAISS / HNSW / `pgvector` / Qdrant) for sub-linear search. The user model, 5-dot taste logic, and recommendation flow are untouched.
+- **Embedding is no longer a cost ceiling.** Fingerprints are computed locally (DJL + `all-MiniLM-L6-v2`), so growing the catalogue costs only CPU time , no per-call API quota. The whole ~4,300-film catalogue was fingerprinted on-box in one pass.
+- **Curation is still a feature.** TMDB's long tail has thin/missing synopses that yield noisy embeddings; a well-described, multi-language set gives *cleaner* feel-matches than millions of sparse rows , so we curate for quality, not because of a quota.
 
 ---
 
@@ -82,7 +82,7 @@ The current catalogue is a **curated ~960-film slice** of TMDB's ~1.2M movies , 
 | Backend | Spring Boot 3 (Java 17, Maven) |
 | Storage | H2 (embedded, file-based, zero install) |
 | Matching | In-memory cosine similarity (instant at ~1k films; swap to an ANN index to scale) |
-| Embeddings | Google Gemini `gemini-embedding-001` |
+| Embeddings | **Local** DJL + sentence-transformers `all-MiniLM-L6-v2` (384-dim, quota-free); Gemini `gemini-embedding-001` selectable |
 | Generation (blurbs / mirror) | Provider chain: **Groq `llama-3.3-70b` → Gemini `gemini-2.5-flash-lite` → deterministic template**, RAG-grounded |
 | Film data + search | TMDB API |
 
@@ -117,14 +117,14 @@ for-you-actually/
 ### Prerequisites
 - **Java 17**, **Maven**, **Node 22+**
 
-> **The repo ships with a prebuilt catalogue** (960 films, all fingerprinted), so it runs **with no API keys at all**: local search, feel-matching, and template "why you'll like this" lines all work offline. Keys are optional and only unlock richer output.
+> **The repo ships with a prebuilt catalogue** (~4,300 films, all fingerprinted by the local model), so it runs **with no API keys at all**: local embeddings, feel-matching, and template "why you'll like this" lines all work offline. Keys are optional and only unlock richer output.
 
 ### 1. (Optional) Add your keys
 Copy `backend/.env.example` to `backend/.env` and fill in whichever you want (all gitignored):
 ```
 TMDB_API_KEY=     # only to rebuild the catalogue from scratch
 GROQ_API_KEY=     # real LLM blurbs + taste mirror (free, no card: console.groq.com/keys)
-GEMINI_API_KEY=   # embeddings for novel onboarding picks + generation fallback
+GEMINI_API_KEY=   # generation fallback only (embeddings run locally, no key needed)
 ```
 Leave them blank to run fully offline against the shipped catalogue.
 
@@ -164,12 +164,12 @@ curl -X POST "http://localhost:8080/api/admin/embed?max=150"
 The app is packaged as a single Docker image (Angular served by Spring Boot, catalogue baked in), so it can run as a free **Docker Space** , no card, no sleep.
 
 1. Create a free account at https://huggingface.co, then **New Space** → SDK **Docker** → blank template → name `for-you-actually` (public).
-2. In the Space, add a file named `Dockerfile` and paste the contents of [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile). (It clones this GitHub repo at build time, so the 59 MB catalogue never needs Git LFS on HF.)
+2. In the Space, add a file named `Dockerfile` and paste the contents of [`deploy/huggingface/Dockerfile`](deploy/huggingface/Dockerfile). (It clones this GitHub repo at build time, so the ~14 MB catalogue never needs Git LFS on HF.)
 3. Ensure the Space `README.md` front-matter has `sdk: docker` and `app_port: 8080`.
 4. **Settings → Variables and secrets** → add secrets (all optional , the app runs without them):
    - `GROQ_API_KEY` , real "why you'll like this" + taste mirror (free, no card: https://console.groq.com/keys)
-   - `GEMINI_API_KEY` , generation fallback + embeddings for novel onboarding picks
-5. The Space builds (~5–10 min) and goes live at `https://<username>-for-you-actually.hf.space`. After pushing changes to GitHub `main`, hit **factory rebuild** to redeploy.
+   - `GEMINI_API_KEY` , generation fallback only (embeddings run locally, no key needed)
+5. The Space builds (~5–10 min) and goes live at `https://<username>-for-you-actually.hf.space`. After pushing changes to GitHub `main`, hit **factory rebuild** to redeploy. **First start takes ~1–2 min** while the local embedding model downloads its weights into the cache , give it a moment before loading picks.
 
 > For local Docker or other hosts (e.g. Render), the root [`Dockerfile`](Dockerfile) builds straight from the repo context instead.
 
@@ -200,8 +200,9 @@ _Add captures here for the writeup:_
 
 ## Known limits
 
-- **Free-tier quotas, handled by design.** Generation runs through a fallback chain (Groq → Gemini → deterministic template), so blurbs and the mirror never go blank , at worst they degrade to an honest, metadata-built sentence. Embeddings use Gemini (~1000/day); onboarding is largely insulated because catalogue picks reuse their stored fingerprint (**zero** embedding calls). A live embedding is only needed for a picked film we've never seen; if that quota is spent, those specific picks pause until reset.
-- **In-memory matching.** Great to ~1k films; swap `MovieVectorIndex` for an ANN/vector DB (pgvector / Qdrant / FAISS) to scale to millions , see *How it scales* above.
+- **Embeddings are local and quota-free.** Fingerprints (catalogue *and* novel onboarding picks) are computed on-box by DJL + `all-MiniLM-L6-v2` , no API key, no daily cap. The only cost is a one-time model download (~90 MB) on first start and CPU time per embedding.
+- **Generation quotas, handled by design.** Generation runs through a fallback chain (Groq → Gemini → deterministic template), so blurbs and the mirror never go blank , at worst they degrade to an honest, metadata-built sentence.
+- **In-memory matching.** Great to a few thousand films; swap `MovieVectorIndex` for an ANN/vector DB (pgvector / Qdrant / FAISS) to scale to millions , see *How it scales* above.
 
 ---
 
