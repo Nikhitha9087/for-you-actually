@@ -57,4 +57,12 @@ public class Movie {
     /** The feeling fingerprint (embedding). Null until generated in a later stage. */
     @Column(length = 100000)
     private String embeddingJson;
+
+    /**
+     * Where-to-watch providers, stored as a {@link com.foryouactually.backend.model.WatchInfo}
+     * JSON blob. Baked into the catalogue so the live app shows streaming options with no TMDB
+     * key at runtime. Null until enriched.
+     */
+    @Column(length = 2000)
+    private String watchJson;
 }

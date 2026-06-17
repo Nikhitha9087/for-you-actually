@@ -37,11 +37,15 @@ export class ApiService {
   recommend(
     userId: string,
     genre: Genre | null,
-    count = 3
+    count = 9,
+    exclude: number[] = []
   ): Observable<Recommendation[]> {
     let params = new HttpParams().set('userId', userId).set('count', count);
     if (genre) {
       params = params.set('genre', genre);
+    }
+    if (exclude.length) {
+      params = params.set('exclude', exclude.join(','));
     }
     return this.http.get<Recommendation[]>(`${API_BASE}/recommend`, { params });
   }

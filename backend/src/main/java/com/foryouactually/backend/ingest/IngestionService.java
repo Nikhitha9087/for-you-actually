@@ -70,6 +70,11 @@ public class IngestionService {
             if (dto.overview() == null || dto.overview().isBlank()) {
                 continue;
             }
+            // Additive only: never overwrite an existing row, or we'd wipe its costly
+            // embedding/watch enrichment. Re-runs simply skip films we already have.
+            if (movies.existsById(dto.id())) {
+                continue;
+            }
             movies.save(toMovie(dto));
             saved++;
         }

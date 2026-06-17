@@ -2,6 +2,7 @@ package com.foryouactually.backend.web;
 
 import com.foryouactually.backend.embed.EmbeddingService;
 import com.foryouactually.backend.ingest.IngestionService;
+import com.foryouactually.backend.watch.WatchProviderService;
 import com.foryouactually.backend.match.MovieVectorIndex;
 import com.foryouactually.backend.match.ScoredMovie;
 import com.foryouactually.backend.model.Genre;
@@ -26,15 +27,18 @@ public class MovieController {
 
     private final IngestionService ingestionService;
     private final EmbeddingService embeddingService;
+    private final WatchProviderService watchProviders;
     private final MovieVectorIndex vectorIndex;
     private final MovieRepository movies;
 
     public MovieController(IngestionService ingestionService,
                            EmbeddingService embeddingService,
+                           WatchProviderService watchProviders,
                            MovieVectorIndex vectorIndex,
                            MovieRepository movies) {
         this.ingestionService = ingestionService;
         this.embeddingService = embeddingService;
+        this.watchProviders = watchProviders;
         this.vectorIndex = vectorIndex;
         this.movies = movies;
     }
@@ -70,6 +74,19 @@ public class MovieController {
         vectorIndex.refresh();
         return Map.of(
                 "fingerprintedThisRun", result.done(),
+                "failed", result.failed(),
+                "remaining", result.remaining(),
+                "totalInCatalog", movies.count()
+        );
+    }
+
+    /** Enriches up to {@code max} movies with where-to-watch providers. Needs a TMDB key; the
+     *  result is baked into the catalogue so the live app needs no key. Call until remaining = 0. */
+    @PostMapping("/admin/watch")
+    public Map<String, Object> watch(@RequestParam(defaultValue = "200") int max) {
+        WatchProviderService.Result result = watchProviders.enrichMissing(max);
+        return Map.of(
+                "enrichedThisRun", result.done(),
                 "failed", result.failed(),
                 "remaining", result.remaining(),
                 "totalInCatalog", movies.count()

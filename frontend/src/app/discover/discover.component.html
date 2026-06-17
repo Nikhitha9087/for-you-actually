@@ -1,6 +1,6 @@
 <section class="head">
   <h1>For you, <span class="accent">actually</span></h1>
-  <p class="sub">Three picks matched to the feeling you described , reactions reshape what comes next.</p>
+  <p class="sub">Picks matched to the feeling you described , react to reshape what comes next, and load more anytime.</p>
 </section>
 
 <div class="filters">
@@ -47,13 +47,36 @@
         <span class="why-mark">“</span>{{ card.rec.whyYoullLikeIt }}
       </p>
 
+      <div class="watch" *ngIf="hasWatch(card.rec)">
+        <span class="watch-label">
+          Where to watch<span *ngIf="card.rec.watch!.providers.length && card.rec.watch?.region"> · {{ regionName(card.rec.watch!.region) }}</span>
+        </span>
+        <div class="watch-row">
+          <ng-container *ngFor="let p of card.rec.watch!.providers">
+            <img *ngIf="p.logoUrl" class="provider-logo" [src]="p.logoUrl" [alt]="p.name" [title]="p.name" />
+            <span *ngIf="!p.logoUrl" class="provider-text">{{ p.name }}</span>
+          </ng-container>
+          <a
+            *ngIf="watchLink(card.rec)"
+            class="watch-link"
+            [href]="watchLink(card.rec)"
+            target="_blank"
+            rel="noopener"
+          >
+            {{ card.rec.watch!.providers.length ? 'See your country →' : 'Where to watch →' }}
+          </a>
+        </div>
+      </div>
+
       <ng-container *ngIf="!card.done; else reacted">
         <input
           class="words"
           type="text"
           placeholder="In your words… (optional)"
           [(ngModel)]="card.words"
+          (keyup.enter)="react(card, 'MORE_LIKE_THIS')"
         />
+        <p class="words-hint">Your note rides with your reaction , tap one below (or press Enter for “More like this”).</p>
         <div class="actions">
           <button class="act more" [disabled]="card.reacting" (click)="react(card, 'MORE_LIKE_THIS')">
             More like this
@@ -79,8 +102,9 @@
 </div>
 
 <div class="next" *ngIf="!loading && cards.length">
-  <button class="primary" (click)="load()">
-    {{ allReacted ? 'Show me the next three' : 'Refresh picks' }}
+  <button class="primary" *ngIf="!exhausted" [disabled]="loadingMore" (click)="loadMore()">
+    {{ loadingMore ? 'Finding more…' : 'Show more picks' }}
   </button>
+  <span class="exhausted-msg" *ngIf="exhausted">That's everything that fits this mood , try another, or start over.</span>
   <button class="ghost" (click)="startOver()">Start over</button>
 </div>

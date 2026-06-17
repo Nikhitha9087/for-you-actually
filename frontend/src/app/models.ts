@@ -69,6 +69,17 @@ export interface MovieSuggestion {
   posterUrl: string | null;
 }
 
+export interface WatchProvider {
+  name: string;
+  logoUrl: string | null;
+}
+
+export interface WatchInfo {
+  region: string | null;
+  link: string | null;
+  providers: WatchProvider[];
+}
+
 export interface Recommendation {
   id: number;
   title: string;
@@ -78,6 +89,7 @@ export interface Recommendation {
   posterUrl: string | null;
   matchScore: number;
   whyYoullLikeIt: string | null;
+  watch: WatchInfo | null;
 }
 
 export interface TasteShelf {

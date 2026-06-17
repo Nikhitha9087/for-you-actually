@@ -1,6 +1,7 @@
 package com.foryouactually.backend.client;
 
 import com.foryouactually.backend.client.dto.TmdbPageDto;
+import com.foryouactually.backend.client.dto.WatchProvidersResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -76,7 +77,26 @@ public class TmdbClient {
                 .body(TmdbPageDto.class);
     }
 
+    /**
+     * Where-to-watch providers for a film (streaming/rent/buy by country, via JustWatch).
+     * Used once at enrichment time so the data can be baked into the catalogue.
+     */
+    public WatchProvidersResponse watchProviders(long movieId) {
+        return http.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/movie/{id}/watch/providers")
+                        .queryParam("api_key", apiKey)
+                        .build(movieId))
+                .retrieve()
+                .body(WatchProvidersResponse.class);
+    }
+
     public String toPosterUrl(String posterPath) {
         return posterPath == null ? null : imageBaseUrl + posterPath;
+    }
+
+    /** Provider logos are small; w92 is the right size for a chip. */
+    public String toLogoUrl(String logoPath) {
+        return logoPath == null ? null : "https://image.tmdb.org/t/p/w92" + logoPath;
     }
 }

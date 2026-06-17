@@ -25,7 +25,14 @@ export class DiscoverComponent implements OnInit {
   selectedGenre: Genre | null = null;
   cards: CardState[] = [];
   loading = false;
+  loadingMore = false;
+  exhausted = false;
   error: string | null = null;
+
+  /** First batch size; "Show more" appends this many each time. */
+  private readonly batchSize = 9;
+  /** Films already shown this session, so paging never repeats a pick. */
+  private shownIds = new Set<number>();
 
   constructor(private api: ApiService, private router: Router) {}
 
@@ -45,6 +52,7 @@ export class DiscoverComponent implements OnInit {
     this.load();
   }
 
+  /** Fresh start for a mood: reset the seen-this-session set and load the first batch. */
   load(): void {
     const userId = this.api.userId;
     if (!userId) {
@@ -52,14 +60,13 @@ export class DiscoverComponent implements OnInit {
     }
     this.loading = true;
     this.error = null;
-    this.api.recommend(userId, this.selectedGenre, 3).subscribe({
+    this.exhausted = false;
+    this.shownIds = new Set<number>();
+    this.api.recommend(userId, this.selectedGenre, this.batchSize, []).subscribe({
       next: (recs) => {
-        this.cards = recs.map((rec) => ({
-          rec,
-          words: '',
-          reacting: false,
-          done: null,
-        }));
+        this.cards = recs.map((rec) => this.toCard(rec));
+        recs.forEach((rec) => this.shownIds.add(rec.id));
+        this.exhausted = recs.length < this.batchSize;
         this.loading = false;
       },
       error: () => {
@@ -67,6 +74,33 @@ export class DiscoverComponent implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  /** Appends the next batch, excluding everything shown so far (no repeats). */
+  loadMore(): void {
+    const userId = this.api.userId;
+    if (!userId || this.loadingMore || this.exhausted) {
+      return;
+    }
+    this.loadingMore = true;
+    this.api
+      .recommend(userId, this.selectedGenre, this.batchSize, Array.from(this.shownIds))
+      .subscribe({
+        next: (recs) => {
+          const fresh = recs.filter((rec) => !this.shownIds.has(rec.id));
+          fresh.forEach((rec) => this.shownIds.add(rec.id));
+          this.cards = [...this.cards, ...fresh.map((rec) => this.toCard(rec))];
+          this.exhausted = recs.length < this.batchSize;
+          this.loadingMore = false;
+        },
+        error: () => {
+          this.loadingMore = false;
+        },
+      });
+  }
+
+  private toCard(rec: Recommendation): CardState {
+    return { rec, words: '', reacting: false, done: null };
   }
 
   react(card: CardState, reaction: Reaction): void {
@@ -94,12 +128,26 @@ export class DiscoverComponent implements OnInit {
       });
   }
 
-  get allReacted(): boolean {
-    return this.cards.length > 0 && this.cards.every((c) => c.done !== null);
-  }
-
   posterFor(rec: Recommendation): string | null {
     return rec.posterUrl;
+  }
+
+  hasWatch(rec: Recommendation): boolean {
+    return !!rec.watch && ((rec.watch.providers?.length ?? 0) > 0 || !!rec.watch.link);
+  }
+
+  regionName(code: string | null): string {
+    if (!code) {
+      return '';
+    }
+    const map: Record<string, string> = { IN: 'India', US: 'the US' };
+    return map[code] ?? code;
+  }
+
+  /** Region-neutral TMDB watch link , dropping ?locale lets TMDB show the viewer's own country. */
+  watchLink(rec: Recommendation): string | null {
+    const link = rec.watch?.link;
+    return link ? link.split('?')[0] : null;
   }
 
   langName(code: string): string {

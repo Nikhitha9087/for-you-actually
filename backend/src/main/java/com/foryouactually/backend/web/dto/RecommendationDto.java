@@ -2,6 +2,8 @@ package com.foryouactually.backend.web.dto;
 
 import com.foryouactually.backend.match.ScoredMovie;
 import com.foryouactually.backend.model.Genre;
+import com.foryouactually.backend.model.WatchInfo;
+import com.foryouactually.backend.util.WatchUtil;
 
 import java.util.Set;
 
@@ -13,7 +15,8 @@ public record RecommendationDto(
         Set<Genre> genres,
         String posterUrl,
         double matchScore,
-        String whyYoullLikeIt
+        String whyYoullLikeIt,
+        WatchInfo watch
 ) {
     public static RecommendationDto from(ScoredMovie scored) {
         return from(scored, null);
@@ -28,7 +31,8 @@ public record RecommendationDto(
                 scored.movie().getGenres(),
                 scored.movie().getPosterUrl(),
                 Math.round(scored.score() * 1000.0) / 1000.0,
-                whyYoullLikeIt
+                whyYoullLikeIt,
+                WatchUtil.fromJson(scored.movie().getWatchJson())
         );
     }
 }
