@@ -112,30 +112,42 @@ export class DiscoverComponent implements OnInit {
 
   react(card: CardState, reaction: Reaction): void {
     const userId = this.api.userId;
-    if (!userId || card.reacting) {
+    if (!userId || card.reacting || card.done) {
       return;
     }
-    card.reacting = true;
+    // Optimistic: reflect the choice instantly so the card responds without waiting on the
+    // network. The taste nudge is a cheap server-side vector update, so we persist it in the
+    // background and only roll back the card if the request actually fails.
+    const words = card.words.trim() || undefined;
+    card.done = reaction;
     this.api
       .react({
         userId,
         movieId: card.rec.id,
         genre: this.selectedGenre,
         reaction,
-        words: card.words.trim() || undefined,
+        words,
       })
       .subscribe({
-        next: () => {
-          card.done = reaction;
-          card.reacting = false;
-        },
         error: (err) => {
           if (this.handleStaleUser(err)) {
             return;
           }
-          card.reacting = false;
+          // Non-fatal: the nudge may not have persisted, but keep the UX moving.
         },
       });
+    // Briefly show the confirmation, then remove the card and keep the feed full.
+    setTimeout(() => {
+      this.cards = this.cards.filter((c) => c !== card);
+      this.replenishIfLow();
+    }, 650);
+  }
+
+  /** Keeps the grid populated: pulls the next batch before the user runs out of cards. */
+  private replenishIfLow(): void {
+    if (!this.exhausted && !this.loadingMore && this.cards.length < 4) {
+      this.loadMore();
+    }
   }
 
   /**

@@ -101,10 +101,11 @@
   </div>
 </div>
 
-<div class="next" *ngIf="!loading && cards.length">
+<div class="next" *ngIf="!loading && (cards.length || exhausted)">
   <button class="primary" *ngIf="!exhausted" [disabled]="loadingMore" (click)="loadMore()">
     {{ loadingMore ? 'Finding more…' : 'Show more picks' }}
   </button>
-  <span class="exhausted-msg" *ngIf="exhausted">That's everything that fits this mood , try another, or start over.</span>
+  <span class="exhausted-msg" *ngIf="exhausted && !cards.length">That's everything that fits this mood , try another mood above, or start over.</span>
+  <span class="exhausted-msg" *ngIf="exhausted && cards.length">That's everything that fits this mood , react to these, try another, or start over.</span>
   <button class="ghost" (click)="startOver()">Start over</button>
 </div>
