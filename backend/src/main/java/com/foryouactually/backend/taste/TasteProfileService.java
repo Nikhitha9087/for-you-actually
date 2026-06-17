@@ -1,6 +1,7 @@
 package com.foryouactually.backend.taste;
 
 import com.foryouactually.backend.embed.EmbeddingModel;
+import com.foryouactually.backend.error.UnknownUserException;
 import com.foryouactually.backend.match.MovieVectorIndex;
 import com.foryouactually.backend.model.Genre;
 import com.foryouactually.backend.model.Movie;
@@ -108,7 +109,7 @@ public class TasteProfileService {
     /** Applies a reaction: moves the relevant taste dot(s) and remembers the movie as seen. */
     public void react(ReactRequest request) {
         UserProfile user = users.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("Unknown user: " + request.userId()));
+                .orElseThrow(() -> new UnknownUserException(request.userId()));
 
         float[] movieVector = vectorIndex.vectorOf(request.movieId());
         if (movieVector != null) {

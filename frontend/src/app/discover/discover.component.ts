@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../api.service';
@@ -69,7 +70,10 @@ export class DiscoverComponent implements OnInit {
         this.exhausted = recs.length < this.batchSize;
         this.loading = false;
       },
-      error: () => {
+      error: (err) => {
+        if (this.handleStaleUser(err)) {
+          return;
+        }
         this.error = 'Could not load picks. Is the backend running on :8080?';
         this.loading = false;
       },
@@ -93,7 +97,10 @@ export class DiscoverComponent implements OnInit {
           this.exhausted = recs.length < this.batchSize;
           this.loadingMore = false;
         },
-        error: () => {
+        error: (err) => {
+          if (this.handleStaleUser(err)) {
+            return;
+          }
           this.loadingMore = false;
         },
       });
@@ -122,10 +129,27 @@ export class DiscoverComponent implements OnInit {
           card.done = reaction;
           card.reacting = false;
         },
-        error: () => {
+        error: (err) => {
+          if (this.handleStaleUser(err)) {
+            return;
+          }
           card.reacting = false;
         },
       });
+  }
+
+  /**
+   * A 404 means this browser holds a userId the server no longer knows (e.g. after a
+   * fresh DB ship). Self-heal: drop the stale id and send the visitor back to onboarding
+   * instead of trapping them on a "could not load" error.
+   */
+  private handleStaleUser(err: unknown): boolean {
+    if (err instanceof HttpErrorResponse && err.status === 404) {
+      this.api.clearUser();
+      this.router.navigate(['/']);
+      return true;
+    }
+    return false;
   }
 
   posterFor(rec: Recommendation): string | null {

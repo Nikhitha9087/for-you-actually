@@ -1,5 +1,6 @@
 package com.foryouactually.backend.recommend;
 
+import com.foryouactually.backend.error.UnknownUserException;
 import com.foryouactually.backend.match.MovieVectorIndex;
 import com.foryouactually.backend.match.ScoredMovie;
 import com.foryouactually.backend.model.Genre;
@@ -43,7 +44,7 @@ public class RecommendationService {
 
     public List<ScoredMovie> recommend(String userId, Genre genre, int count, Set<Long> extraExclude) {
         UserProfile user = users.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown user: " + userId));
+                .orElseThrow(() -> new UnknownUserException(userId));
 
         Set<Long> exclude = new HashSet<>(user.getSeenMovieIds());
         if (extraExclude != null) {

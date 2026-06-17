@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../api.service';
 import { GENRE_LABELS, Recommendation, TasteProfile } from '../models';
@@ -39,7 +40,12 @@ export class ProfileComponent implements OnInit {
         this.profile = p;
         this.loading = false;
       },
-      error: () => {
+      error: (err) => {
+        if (err instanceof HttpErrorResponse && err.status === 404) {
+          this.api.clearUser();
+          this.router.navigate(['/']);
+          return;
+        }
         this.error = 'Could not load your taste profile. Is the backend running on :8080?';
         this.loading = false;
       },

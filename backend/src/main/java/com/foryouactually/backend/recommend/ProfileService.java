@@ -2,6 +2,7 @@ package com.foryouactually.backend.recommend;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.foryouactually.backend.error.UnknownUserException;
 import com.foryouactually.backend.generate.TextGenerationService;
 import com.foryouactually.backend.match.ScoredMovie;
 import com.foryouactually.backend.model.Genre;
@@ -53,7 +54,7 @@ public class ProfileService {
 
     public TasteProfileDto build(String userId) {
         UserProfile user = users.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown user: " + userId));
+                .orElseThrow(() -> new UnknownUserException(userId));
 
         List<TasteProfileDto.Shelf> shelves = new ArrayList<>();
         Map<Long, Movie> likedSample = new LinkedHashMap<>();
