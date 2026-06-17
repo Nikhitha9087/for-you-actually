@@ -16,8 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.text.Normalizer;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Onboarding title autocomplete.
@@ -33,7 +35,7 @@ import java.util.Locale;
 public class SearchController {
 
     private static final Logger log = LoggerFactory.getLogger(SearchController.class);
-    private static final int LIMIT = 8;
+    private static final int LIMIT = 10;
 
     private final MovieRepository movies;
     private final TmdbClient tmdb;
@@ -65,29 +67,97 @@ public class SearchController {
         return searchCatalogue(query);
     }
 
-    /** Live, full-TMDB search — any movie ever made. */
+    /**
+     * Live, full-TMDB search — any movie ever made. Forgiving by design: we query as typed
+     * and also with whitespace collapsed ("old boy" -> "oldboy"), merge both, then re-rank by
+     * how well each title matches (exact > prefix > contains > TMDB token match), breaking ties
+     * by popularity. That surfaces "Oldboy" at the top even when the user spaces it out.
+     */
     private List<MovieSuggestionDto> searchTmdb(String query) {
-        TmdbPageDto page = tmdb.searchMovies(query);
-        if (page == null || page.results() == null) {
+        Map<Long, TmdbMovieDto> byId = new LinkedHashMap<>();
+        collect(byId, query);
+        String collapsed = query.replaceAll("\\s+", "");
+        if (!collapsed.equalsIgnoreCase(query)) {
+            collect(byId, collapsed);
+        }
+        if (byId.isEmpty()) {
             return List.of();
         }
-        return page.results().stream()
+        String fq = fold(query);
+        String fqNoSpace = fq.replaceAll("\\s+", "");
+        return byId.values().stream()
                 .filter(d -> d.overview() != null && !d.overview().isBlank())
+                .sorted(Comparator
+                        .comparingInt((TmdbMovieDto d) -> titleTier(fq, fqNoSpace, d.title(), d.originalTitle()))
+                        .thenComparing(d -> d.popularity() == null ? 0.0 : d.popularity(),
+                                Comparator.reverseOrder()))
                 .limit(LIMIT)
                 .map(this::toSuggestion)
                 .toList();
     }
 
-    /** Offline fallback — accent-insensitive substring match over the fingerprinted catalogue. */
+    /** Runs one TMDB query and folds its hits into the dedup map (first spelling wins on ties). */
+    private void collect(Map<Long, TmdbMovieDto> byId, String q) {
+        try {
+            TmdbPageDto page = tmdb.searchMovies(q);
+            if (page != null && page.results() != null) {
+                for (TmdbMovieDto d : page.results()) {
+                    if (d.id() != null) {
+                        byId.putIfAbsent(d.id(), d);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("TMDB search failed for '{}' ({})", q, e.getMessage());
+        }
+    }
+
+    /** Offline fallback — accent/space-insensitive substring match over the fingerprinted catalogue. */
     private List<MovieSuggestionDto> searchCatalogue(String query) {
-        String needle = fold(query);
+        String fq = fold(query);
+        String fqNoSpace = fq.replaceAll("\\s+", "");
         return movies.findByEmbeddingJsonIsNotNull().stream()
-                .filter(m -> m.getTitle() != null && fold(m.getTitle()).contains(needle))
-                .sorted(Comparator.comparingDouble(
-                        (Movie m) -> m.getPopularity() == null ? 0.0 : m.getPopularity()).reversed())
+                .filter(m -> m.getTitle() != null)
+                .filter(m -> {
+                    String t = fold(m.getTitle());
+                    return t.contains(fq) || t.replaceAll("\\s+", "").contains(fqNoSpace);
+                })
+                .sorted(Comparator
+                        .comparingInt((Movie m) -> titleTier(fq, fqNoSpace, m.getTitle(), null))
+                        .thenComparing(m -> m.getPopularity() == null ? 0.0 : m.getPopularity(),
+                                Comparator.reverseOrder()))
                 .limit(LIMIT)
                 .map(this::toSuggestion)
                 .toList();
+    }
+
+    /**
+     * Relevance bucket for a candidate title against the query (lower = better):
+     * 0 exact, 1 prefix, 2 contains, 3 everything else (matched on individual tokens by TMDB).
+     * Both title and original title are checked, in their as-is and space-collapsed forms.
+     */
+    private int titleTier(String foldedQuery, String foldedQueryNoSpace, String title, String originalTitle) {
+        int best = 3;
+        best = Math.min(best, tierFor(foldedQuery, foldedQueryNoSpace, title));
+        if (originalTitle != null && !originalTitle.isBlank()) {
+            best = Math.min(best, tierFor(foldedQuery, foldedQueryNoSpace, originalTitle));
+        }
+        return best;
+    }
+
+    private int tierFor(String foldedQuery, String foldedQueryNoSpace, String candidate) {
+        String t = fold(candidate);
+        String tNoSpace = t.replaceAll("\\s+", "");
+        if (t.equals(foldedQuery) || tNoSpace.equals(foldedQueryNoSpace)) {
+            return 0;
+        }
+        if (t.startsWith(foldedQuery) || tNoSpace.startsWith(foldedQueryNoSpace)) {
+            return 1;
+        }
+        if (t.contains(foldedQuery) || tNoSpace.contains(foldedQueryNoSpace)) {
+            return 2;
+        }
+        return 3;
     }
 
     /** Lowercase + strip accents, so "amelie" matches "Amélie" and "salo" matches "Salò". */
