@@ -215,5 +215,3 @@ _Add captures here for the writeup:_
 - An evaluation harness to measure recommendation quality.
 
 ---
-
-_Built by the Digital COE Gen AI Team._
